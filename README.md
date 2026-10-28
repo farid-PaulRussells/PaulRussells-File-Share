@@ -1,6 +1,6 @@
 # PaulRussells File Share
 
-Developed by **Faridul Islam**. Version 1.0.0.
+Developed by **Faridul Islam**. Version 2.0.0.
 
 Share files and folders straight from your computer by link or QR code, peer to peer.
 Nothing is uploaded to a server and there is no size limit. Only the sender needs the app;
