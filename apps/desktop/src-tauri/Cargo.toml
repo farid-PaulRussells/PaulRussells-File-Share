@@ -1,0 +1,26 @@
+[package]
+name = "paulrussells-file-share"
+version = "1.0.0"
+authors = ["Faridul Islam"]
+description = "PaulRussells File Share"
+edition = "2021"
+
+# The dev binary's name is what macOS shows in the Dock and menu bar.
+[[bin]]
+name = "PaulRussellsFileShare"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.15"
+base64 = "0.22"
+urlencoding = "2"
+image = { version = "0.25", default-features = false, features = ["png"] }

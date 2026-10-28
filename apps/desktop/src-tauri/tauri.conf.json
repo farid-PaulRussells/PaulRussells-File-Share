@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PaulRussells File Share",
+  "version": "1.0.0",
+  "identifier": "com.paulrussells.fileshare",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run vite:dev",
+    "beforeBuildCommand": "npm run vite:build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "url": "index.html",
+        "title": "PaulRussells File Share",
+        "width": 420,
+        "height": 560,
+        "resizable": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: wss: ws:; object-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": false,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Faridul Islam",
+    "copyright": "Developed by Faridul Islam. Based on Thawdrop © 2026 papateo (MIT Licence).",
+    "shortDescription": "Share files peer-to-peer by link or QR code"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU2NjFGMTc5QTAwNDRBMkEKUldRcVNnU2dlZkZoNXBzcDYrN2JXZ0xlK1lKUWFraVJ2M2wzeFc1a09KalhjQmZjZHBYaXRSeXUK",
+      "endpoints": [
+        "https://thawdrop.com/updates/latest.json"
+      ]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Default capability for PaulRussells File Share share windows",
+  "windows": ["*"],
+  "permissions": ["core:default", "updater:default", "process:default"]
+}
