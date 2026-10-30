@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod keep_awake;
+
 use base64::{engine::general_purpose, Engine as _};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
@@ -35,6 +37,12 @@ fn window_label_for(path: &str) -> String {
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     format!("share-{:x}", hasher.finish())
+}
+
+/// Turns "keep PC awake while sharing" on or off for the calling window.
+#[tauri::command]
+fn set_keep_awake(enabled: bool, window: tauri::WebviewWindow, awake: State<keep_awake::KeepAwake>) -> Result<(), String> {
+    awake.set(window.label(), enabled)
 }
 
 #[tauri::command]
@@ -167,7 +175,7 @@ fn open_share_window(app: &AppHandle, path: String) {
     let url = format!("share.html?path={}", urlencoding::encode(&path));
     let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url.into()))
         .title("PaulRussells File Share")
-        .inner_size(420.0, 560.0)
+        .inner_size(460.0, 760.0)
         .resizable(false)
         .build();
 }
@@ -175,6 +183,13 @@ fn open_share_window(app: &AppHandle, path: String) {
 fn main() {
     tauri::Builder::default()
         .manage(AllowedPaths(Mutex::new(HashSet::new())))
+        .manage(keep_awake::KeepAwake::new())
+        // A window that closes mid-share must not leave the PC held awake.
+        .on_window_event(|window, event| {
+            if let WindowEvent::Destroyed = event {
+                let _ = window.state::<keep_awake::KeepAwake>().set(window.label(), false);
+            }
+        })
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -182,7 +197,7 @@ fn main() {
                 open_share_window(app, path);
             }
         }))
-        .invoke_handler(tauri::generate_handler![read_file_as_base64, expand_paths, pick_files, pick_folder])
+        .invoke_handler(tauri::generate_handler![read_file_as_base64, expand_paths, pick_files, pick_folder, set_keep_awake])
         .setup(|app| {
             let share_item = MenuItem::with_id(app, "share", "Share a file…", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit PaulRussells File Share", true, None::<&str>)?;

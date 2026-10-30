@@ -48,16 +48,26 @@ export function populateExpiryOptions(selectEl) {
  * startBtn) and resolves with the chosen { password, expiresInMs,
  * maxDownloads } once the user clicks "Start sharing".
  */
-export function collectShareOptions({ passwordInput, expirySelect, maxDownloadsInput, startBtn }) {
+export function collectShareOptions({ passwordInput, expirySelect, maxDownloadsInput, keepAwakeInput, startBtn }) {
   return new Promise((resolve) => {
     startBtn.onclick = () => {
       const password = passwordInput.value.trim() || null;
       const expiresInMs = EXPIRY_OPTIONS.find((o) => o.value === expirySelect.value)?.ms ?? null;
       const parsed = parseInt(maxDownloadsInput.value, 10);
       const maxDownloads = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-      resolve({ password, expiresInMs, maxDownloads });
+      const keepAwake = keepAwakeInput ? keepAwakeInput.checked : false;
+      resolve({ password, expiresInMs, maxDownloads, keepAwake });
     };
   });
+}
+
+/**
+ * Drives the "PC becomes a server" animation. `state` is one of
+ * booting | online | stopped | error; the CSS reacts to it.
+ */
+function setStage(els, state, text) {
+  if (els.stageEl) els.stageEl.dataset.state = state;
+  if (els.stageTextEl && text) els.stageTextEl.textContent = text;
 }
 
 function base64ToBytes(base64) {
@@ -104,9 +114,17 @@ function isWireComplete(wire, numPieces) {
 export async function shareFilesAtPaths(
   paths,
   els,
-  { onStop, password = null, expiresInMs = null, maxDownloads = null } = {}
+  { onStop, password = null, expiresInMs = null, maxDownloads = null, keepAwake = false } = {}
 ) {
-  const { fileNameEl, statusEl, qrEl, linkEl, copyBtn, stopBtn, expiryEl, downloadsEl } = els;
+  const { fileNameEl, statusEl, qrEl, linkEl, copyBtn, stopBtn, expiryEl, downloadsEl, keepAwakeEl } = els;
+
+  // Reset anything left over from a previous share in this window.
+  qrEl.removeAttribute('src');
+  linkEl.value = '';
+  if (expiryEl) expiryEl.textContent = '';
+  if (downloadsEl) downloadsEl.textContent = '';
+  if (keepAwakeEl) keepAwakeEl.hidden = true;
+  setStage(els, 'booting', 'Converting this PC into a server…');
 
   const showError = (message) => {
     statusEl.textContent = '';
@@ -114,6 +132,7 @@ export async function shareFilesAtPaths(
     span.className = 'error';
     span.textContent = message;
     statusEl.appendChild(span);
+    setStage(els, 'error', "Server couldn't start");
   };
 
   statusEl.textContent = 'Reading files…';
@@ -147,6 +166,7 @@ export async function shareFilesAtPaths(
   let seedFiles = files;
   if (password) {
     statusEl.textContent = 'Encrypting…';
+    setStage(els, 'booting', 'Encrypting files…');
     try {
       seedFiles = [await encryptFiles(files, password)];
     } catch (err) {
@@ -156,7 +176,8 @@ export async function shareFilesAtPaths(
   }
 
   statusEl.textContent =
-    files.length > 1 ? `Seeding ${files.length} files over WebTorrent…` : 'Seeding file over WebTorrent…';
+    files.length > 1 ? `Starting secure server for ${files.length} files…` : 'Starting secure server…';
+  setStage(els, 'booting', 'Bringing server online…');
 
   const client = new WebTorrent({ tracker: { rtcConfig: { iceServers: ICE_SERVERS } } });
   client.on('error', (err) => showError(err.message ?? String(err)));
@@ -170,6 +191,30 @@ export async function shareFilesAtPaths(
       qrEl.src = await QRCode.toDataURL(link, { margin: 1, width: 320 });
       linkEl.value = link;
       statusEl.textContent = password ? 'Live — ready to share (password protected)' : 'Live — ready to share';
+      setStage(els, 'online', 'Server online · broadcasting');
+
+      // Block system sleep (not the screen) for as long as this share runs.
+      let awakeHeld = false;
+      if (keepAwake) {
+        try {
+          await invoke('set_keep_awake', { enabled: true });
+          awakeHeld = true;
+          if (keepAwakeEl) {
+            keepAwakeEl.classList.remove('warn');
+            keepAwakeEl.classList.add('ok');
+            keepAwakeEl.textContent = 'Sleep blocked while sharing';
+            keepAwakeEl.hidden = false;
+          }
+        } catch (err) {
+          if (keepAwakeEl) {
+            keepAwakeEl.classList.remove('ok');
+            keepAwakeEl.classList.add('warn');
+            keepAwakeEl.textContent = "Couldn't block sleep";
+            keepAwakeEl.title = String(err);
+            keepAwakeEl.hidden = false;
+          }
+        }
+      }
 
       let stopped = false;
       let countdownIntervalId = null;
@@ -178,6 +223,12 @@ export async function shareFilesAtPaths(
         stopped = true;
         clearInterval(countdownIntervalId);
         torrent.destroy();
+        if (awakeHeld) {
+          awakeHeld = false;
+          invoke('set_keep_awake', { enabled: false }).catch(() => {});
+        }
+        if (keepAwakeEl) keepAwakeEl.hidden = true;
+        setStage(els, 'stopped', 'Server offline');
         onStop?.();
       };
 

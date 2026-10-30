@@ -1,6 +1,7 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { shareFilesAtPaths, populateExpiryOptions, collectShareOptions } from './share-core.js';
 import './disable-context-menu.js';
+import { initThemeToggle, initKeepAwakeToggle } from './ui.js';
 
 const optionsView = document.getElementById('optionsView');
 const shareView = document.getElementById('shareView');
@@ -14,16 +15,24 @@ const els = {
   stopBtn: document.getElementById('stopBtn'),
   expiryEl: document.getElementById('expiryEl'),
   downloadsEl: document.getElementById('downloadsEl'),
+  keepAwakeEl: document.getElementById('keepAwakeEl'),
+  stageEl: document.getElementById('serverStage'),
+  stageTextEl: document.getElementById('stageText'),
 };
 
 const optionEls = {
   passwordInput: document.getElementById('password'),
   expirySelect: document.getElementById('expiry'),
   maxDownloadsInput: document.getElementById('maxDownloads'),
+  keepAwakeInput: document.getElementById('keepAwake'),
   startBtn: document.getElementById('startBtn'),
 };
 
 populateExpiryOptions(optionEls.expirySelect);
+initThemeToggle();
+initKeepAwakeToggle(optionEls.keepAwakeInput);
+
+document.getElementById('cancelBtn').addEventListener('click', () => getCurrentWindow().close());
 
 async function main() {
   const params = new URLSearchParams(window.location.search);
@@ -38,7 +47,7 @@ async function main() {
   optionsView.hidden = false;
   document.getElementById('optFileName').textContent = filePath.split(/[\\/]/).pop();
 
-  const { password, expiresInMs, maxDownloads } = await collectShareOptions(optionEls);
+  const { password, expiresInMs, maxDownloads, keepAwake } = await collectShareOptions(optionEls);
 
   optionsView.hidden = true;
   shareView.hidden = false;
@@ -49,6 +58,7 @@ async function main() {
       password,
       expiresInMs,
       maxDownloads,
+      keepAwake,
     });
   } catch {
     // Error already rendered into statusEl by shareFileAtPath.

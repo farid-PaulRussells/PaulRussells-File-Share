@@ -3,7 +3,7 @@ import { relaunch } from '@tauri-apps/plugin-process';
 
 /**
  * Checks for an update on startup. If one is available, shows a full-screen
- * blocking overlay and never resolves until the user updates — Thawdrop
+ * blocking overlay and never resolves until the user updates — PaulRussells File Share
  * treats every available update as mandatory, there's no "later" option.
  *
  * If the check itself fails (e.g. no network, update server briefly down),

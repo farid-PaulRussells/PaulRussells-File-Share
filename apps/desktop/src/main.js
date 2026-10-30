@@ -3,12 +3,14 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { shareFilesAtPaths, populateExpiryOptions, collectShareOptions } from './share-core.js';
 import { enforceUpdate } from './update-gate.js';
 import './disable-context-menu.js';
+import { initThemeToggle, initKeepAwakeToggle } from './ui.js';
 
 // Blocks here (never resolves) if an update is required — everything below
 // only runs once the app is confirmed to be on a current version.
 await enforceUpdate();
 
 const dropzone = document.getElementById('dropzone');
+const startView = document.getElementById('startView');
 const optionsView = document.getElementById('optionsView');
 const shareView = document.getElementById('shareView');
 
@@ -21,31 +23,37 @@ const els = {
   stopBtn: document.getElementById('stopBtn'),
   expiryEl: document.getElementById('expiryEl'),
   downloadsEl: document.getElementById('downloadsEl'),
+  keepAwakeEl: document.getElementById('keepAwakeEl'),
+  stageEl: document.getElementById('serverStage'),
+  stageTextEl: document.getElementById('stageText'),
 };
 
 const optionEls = {
   passwordInput: document.getElementById('password'),
   expirySelect: document.getElementById('expiry'),
   maxDownloadsInput: document.getElementById('maxDownloads'),
+  keepAwakeInput: document.getElementById('keepAwake'),
   startBtn: document.getElementById('startBtn'),
 };
 
 populateExpiryOptions(optionEls.expirySelect);
+initThemeToggle();
+initKeepAwakeToggle(optionEls.keepAwakeInput);
 
 function showDropzone() {
   optionsView.hidden = true;
   shareView.hidden = true;
-  dropzone.hidden = false;
+  startView.hidden = false;
 }
 
 function showOptionsView() {
-  dropzone.hidden = true;
+  startView.hidden = true;
   shareView.hidden = true;
   optionsView.hidden = false;
 }
 
 function showShareView() {
-  dropzone.hidden = true;
+  startView.hidden = true;
   optionsView.hidden = true;
   shareView.hidden = false;
 }
@@ -57,16 +65,18 @@ async function handleFiles(paths) {
   optionEls.passwordInput.value = '';
   optionEls.maxDownloadsInput.value = '';
 
-  const { password, expiresInMs, maxDownloads } = await collectShareOptions(optionEls);
+  const { password, expiresInMs, maxDownloads, keepAwake } = await collectShareOptions(optionEls);
 
   showShareView();
   try {
-    await shareFilesAtPaths(paths, els, { onStop: showDropzone, password, expiresInMs, maxDownloads });
+    await shareFilesAtPaths(paths, els, { onStop: showDropzone, password, expiresInMs, maxDownloads, keepAwake });
   } catch {
     // Error already rendered into statusEl by shareFilesAtPaths; let the
     // user go back to the dropzone instead of getting stuck.
   }
 }
+
+document.getElementById('cancelBtn').addEventListener('click', showDropzone);
 
 dropzone.addEventListener('click', async () => {
   const paths = await invoke('pick_files');
