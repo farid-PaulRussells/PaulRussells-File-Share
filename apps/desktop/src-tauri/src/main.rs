@@ -45,11 +45,19 @@ fn set_keep_awake(enabled: bool, window: tauri::WebviewWindow, awake: State<keep
     awake.set(window.label(), enabled)
 }
 
+/// Reading runs on a background thread (not the window's thread), so the
+/// window stays responsive and "Cancel" works while large files load.
 #[tauri::command]
-fn read_file_as_base64(path: String, allowed: State<AllowedPaths>) -> Result<serde_json::Value, String> {
+async fn read_file_as_base64(path: String, allowed: State<'_, AllowedPaths>) -> Result<serde_json::Value, String> {
     if !allowed.contains(&path) {
         return Err("This file wasn't selected through PaulRussells File Share's picker or drag-and-drop.".into());
     }
+    tauri::async_runtime::spawn_blocking(move || read_file_blocking(path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn read_file_blocking(path: String) -> Result<serde_json::Value, String> {
     let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
     if metadata.is_dir() {
         return Err("This is a folder — expand it into its files first.".into());
@@ -111,12 +119,25 @@ fn collect_folder_files(dir: &std::path::Path, prefix: &str, out: &mut Vec<Share
 /// walking any folders. Only paths already allow-listed (picked or dropped)
 /// are accepted, and the files found inside a folder inherit that permission.
 #[tauri::command]
-fn expand_paths(paths: Vec<String>, allowed: State<AllowedPaths>) -> Result<Vec<ShareEntry>, String> {
-    let mut entries = Vec::new();
+async fn expand_paths(paths: Vec<String>, allowed: State<'_, AllowedPaths>) -> Result<Vec<ShareEntry>, String> {
     for path in &paths {
         if !allowed.contains(path) {
             return Err("This file wasn't selected through PaulRussells File Share's picker or drag-and-drop.".into());
         }
+    }
+    // Walking a big folder happens off the window's thread.
+    let entries = tauri::async_runtime::spawn_blocking(move || expand_paths_blocking(paths))
+        .await
+        .map_err(|e| e.to_string())??;
+    for entry in &entries {
+        allowed.allow(&entry.path);
+    }
+    Ok(entries)
+}
+
+fn expand_paths_blocking(paths: Vec<String>) -> Result<Vec<ShareEntry>, String> {
+    let mut entries = Vec::new();
+    for path in &paths {
         let p = std::path::Path::new(path);
         let file_name = p
             .file_name()
@@ -133,9 +154,6 @@ fn expand_paths(paths: Vec<String>, allowed: State<AllowedPaths>) -> Result<Vec<
     }
     if entries.len() > MAX_FOLDER_FILES {
         return Err(format!("Too many files (more than {MAX_FOLDER_FILES}) — pick fewer."));
-    }
-    for entry in &entries {
-        allowed.allow(&entry.path);
     }
     Ok(entries)
 }

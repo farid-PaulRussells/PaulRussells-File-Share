@@ -126,7 +126,26 @@ export async function shareFilesAtPaths(
   if (keepAwakeEl) keepAwakeEl.hidden = true;
   setStage(els, 'booting', 'Converting this PC into a server…');
 
+  // While files are being prepared the stop button acts as "Cancel" and works
+  // straight away. Any preparation still in flight checks `cancelled` after
+  // each step and quietly bails out without touching the window.
+  let cancelled = false;
+  let client = null;
+  const setStopLabel = (text) => {
+    const label = stopBtn.querySelector('.btn-label');
+    if (label) label.textContent = text;
+  };
+  setStopLabel('Cancel');
+  stopBtn.onclick = () => {
+    if (cancelled) return;
+    cancelled = true;
+    client?.destroy();
+    setStage(els, 'stopped', 'Cancelled');
+    onStop?.();
+  };
+
   const showError = (message) => {
+    if (cancelled) return;
     statusEl.textContent = '';
     const span = document.createElement('span');
     span.className = 'error';
@@ -146,14 +165,18 @@ export async function shareFilesAtPaths(
     files = [];
     for (const [i, { path, name }] of entries.entries()) {
       if (entries.length > 1) statusEl.textContent = `Reading files… ${i + 1}/${entries.length}`;
+      if (cancelled) return;
       const { data } = await invoke('read_file_as_base64', { path });
+      if (cancelled) return;
       // A lone file has no folder to keep, so it goes in by its plain name.
       files.push(new File([base64ToBytes(data)], entries.length === 1 ? name.split('/').pop() : name));
     }
   } catch (err) {
+    if (cancelled) return;
     showError(String(err));
     throw err;
   }
+  if (cancelled) return;
 
   const topFolder = files[0].name.includes('/') ? files[0].name.split('/')[0] : null;
   const isSingleFolder = topFolder && files.every((f) => f.name.startsWith(`${topFolder}/`));
@@ -170,16 +193,18 @@ export async function shareFilesAtPaths(
     try {
       seedFiles = [await encryptFiles(files, password)];
     } catch (err) {
+      if (cancelled) return;
       showError(err.message ?? String(err));
       throw err;
     }
+    if (cancelled) return;
   }
 
   statusEl.textContent =
     files.length > 1 ? `Starting secure server for ${files.length} files…` : 'Starting secure server…';
   setStage(els, 'booting', 'Bringing server online…');
 
-  const client = new WebTorrent({ tracker: { rtcConfig: { iceServers: ICE_SERVERS } } });
+  client = new WebTorrent({ tracker: { rtcConfig: { iceServers: ICE_SERVERS } } });
   client.on('error', (err) => showError(err.message ?? String(err)));
 
   return new Promise((resolve) => {
@@ -187,8 +212,11 @@ export async function shareFilesAtPaths(
     // torrent after the first file — which the receiver then sees as a folder.
     const seedOpts = !password && files.length > 1 && !isSingleFolder ? { name: 'Shared files' } : {};
     client.seed(seedFiles, seedOpts, async (torrent) => {
+      if (cancelled) return;
       const link = buildShareLink(torrent.magnetURI);
-      qrEl.src = await QRCode.toDataURL(link, { margin: 1, width: 320 });
+      const qrDataUrl = await QRCode.toDataURL(link, { margin: 1, width: 320 });
+      if (cancelled) return;
+      qrEl.src = qrDataUrl;
       linkEl.value = link;
       statusEl.textContent = password ? 'Live — ready to share (password protected)' : 'Live — ready to share';
       setStage(els, 'online', 'Server online · broadcasting');
@@ -223,6 +251,7 @@ export async function shareFilesAtPaths(
         stopped = true;
         clearInterval(countdownIntervalId);
         torrent.destroy();
+        client.destroy();
         if (awakeHeld) {
           awakeHeld = false;
           invoke('set_keep_awake', { enabled: false }).catch(() => {});
@@ -239,6 +268,15 @@ export async function shareFilesAtPaths(
         setTimeout(() => (copyBtn.textContent = original), 1200);
       };
 
+      // Cancelled while turning on keep-awake: release it and stop.
+      if (cancelled) {
+        if (awakeHeld) invoke('set_keep_awake', { enabled: false }).catch(() => {});
+        torrent.destroy();
+        client.destroy();
+        return;
+      }
+
+      setStopLabel('Stop sharing');
       stopBtn.onclick = stopSharing;
 
       if (expiresInMs) {

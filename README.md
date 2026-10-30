@@ -1,6 +1,6 @@
 # PaulRussells File Share
 
-Developed by **Faridul Islam**. Version 3.1.0.
+Developed by **Faridul Islam**. Version 4.0.0.
 
 Share files and folders straight from your computer by link or QR code, peer to peer.
 Nothing is uploaded to a server and there is no size limit. Only the sender needs the app;
@@ -8,8 +8,10 @@ recipients just open the link in any browser.
 
 Based on [Thawdrop](https://github.com/papateo/thawdrop) by papateo, used under the MIT Licence (see LICENSE).
 
-## What's new in 1.1.0
+## What's new in 4.0.0
 
+- "Stop sharing" now works straight away while files are still being prepared (it shows as **Cancel** until the share is live)
+- Files and folders are read in the background, so the window no longer freezes on large files
 - Redesigned interface with the Paul Russells logo in the header
 - Dark and light themes, switched with the button at the top right (remembered between launches)
 - "Keep PC awake while sharing" switch: blocks sleep mode only while a share is running, then
